@@ -1,0 +1,54 @@
+[project]
+name = "apogee"
+version = "0.1.0"
+description = "Apogee Engine – automated YouTube video pipeline"
+requires-python = ">=3.11"
+readme = "README.md"
+
+dependencies = [
+    # LLM
+    "anthropic>=0.25.0",
+    "langsmith>=0.1.0",
+    # Database
+    "supabase>=2.4.0",
+    "psycopg2-binary>=2.9.9",
+    "pgvector>=0.2.5",
+    # Embeddings
+    "sentence-transformers>=3.0.0",
+    # Queue
+    "rq>=1.16.0",
+    "redis>=5.0.0",
+    # TTS
+    "edge-tts>=6.1.9",
+    # Video post-processing
+    "ffmpeg-python>=0.2.0",
+    # Utilities
+    "pydantic>=2.7.0",
+    "python-dotenv>=1.0.0",
+    "httpx>=0.27.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+    "ruff>=0.4.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["apogee"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
