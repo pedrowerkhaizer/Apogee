@@ -6,7 +6,7 @@ trigger: always_on
 
 ### Estrutura de pastas
 ```
-apogee/
+Apogee/
   agents/        ← um arquivo por agente (topic_miner.py, researcher.py, etc.)
   workers/       ← workers RQ
   models.py      ← VideoSpec e todos os Pydantic models (fonte da verdade)
