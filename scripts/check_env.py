@@ -99,8 +99,8 @@ def check_supabase_rest() -> bool:
         return True
     except Exception as exc:
         msg = str(exc)
-        # PGRST116 = relação não existe — esperado antes das migrations
-        if "PGRST116" in msg or "does not exist" in msg:
+        # PGRST116/PGRST205 = tabela não existe — esperado antes das migrations
+        if "PGRST116" in msg or "PGRST205" in msg or "does not exist" in msg:
             _ok("Supabase REST", "conectado (tabela agent_runs ainda não existe – OK)")
             return True
         _fail("Supabase REST", msg[:120])
