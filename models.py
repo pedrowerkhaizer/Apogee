@@ -81,6 +81,15 @@ class Script(BaseModel):
         return self
 
 
+# ── FactCheckResult ────────────────────────────────────────────────────────────
+
+
+class FactCheckResult(BaseModel):
+    risk_score: Annotated[float, Field(ge=0.0, le=1.0)]
+    issues: list[str]
+    approved: bool
+
+
 # ── VideoSpec ──────────────────────────────────────────────────────────────────
 
 

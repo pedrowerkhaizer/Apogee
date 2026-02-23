@@ -120,18 +120,20 @@ def _insert_topic(
     embedding: np.ndarray,
     similarity_score: float | None,
 ) -> str:
+    source_urls = [u for u in candidate.get("source_urls", []) if u]  # filtra vazios
     with conn.cursor() as cur:
         cur.execute(
             """
             INSERT INTO topics
-                (channel_id, title, rationale, status, embedding, similarity_score)
-            VALUES (%s, %s, %s, 'pending', %s, %s)
+                (channel_id, title, rationale, source_urls, status, embedding, similarity_score)
+            VALUES (%s, %s, %s, %s, 'pending', %s, %s)
             RETURNING id
             """,
             (
                 str(channel_id),
                 candidate["title"],
                 candidate.get("rationale"),
+                source_urls,
                 embedding,
                 similarity_score,
             ),
@@ -229,8 +231,17 @@ def _call_claude(
                                         "type": "string",
                                         "description": "Por que esse tópico tem potencial de engajamento",
                                     },
+                                    "source_urls": {
+                                        "type": "array",
+                                        "items": {"type": "string"},
+                                        "description": (
+                                            "URLs de fontes reais e conhecidas que embasam o tópico "
+                                            "(ex: https://arxiv.org/..., https://nature.com/...). "
+                                            "Deixe vazio se não souber com certeza — nunca invente."
+                                        ),
+                                    },
                                 },
-                                "required": ["title", "rationale"],
+                                "required": ["title", "rationale", "source_urls"],
                             },
                             "minItems": CANDIDATE_COUNT,
                             "maxItems": CANDIDATE_COUNT,
