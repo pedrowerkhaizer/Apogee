@@ -345,18 +345,26 @@ if __name__ == "__main__":
         print("SUPABASE_DB_URL não definido no .env")
         sys.exit(1)
 
-    # Busca o primeiro tópico com status 'pending'
+    # Busca o primeiro tópico aprovado cujo vídeo ainda não tem claims
     _conn = psycopg2.connect(_db_url, connect_timeout=10)
     with _conn.cursor() as _cur:
         _cur.execute(
-            "SELECT id, title FROM topics WHERE status = 'pending' ORDER BY created_at ASC LIMIT 1"
+            """
+            SELECT t.id, t.title FROM topics t
+            JOIN   videos v ON v.topic_id = t.id
+            LEFT   JOIN claims c ON c.video_id = v.id
+            WHERE  t.status = 'approved'
+            AND    c.id IS NULL
+            ORDER  BY t.created_at ASC
+            LIMIT  1
+            """
         )
         _row = _cur.fetchone()
     _conn.close()
 
     if not _row:
-        print("Nenhum tópico com status='pending' encontrado.")
-        print("Execute primeiro: uv run python agents/topic_miner.py")
+        print("Nenhum tópico aprovado sem claims encontrado.")
+        print("Aprove um tópico via Supabase ou execute: uv run python agents/topic_miner.py")
         sys.exit(1)
 
     _topic_id, _topic_title = _row
