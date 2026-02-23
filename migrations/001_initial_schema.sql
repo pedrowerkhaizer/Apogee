@@ -28,7 +28,7 @@ EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 -- =============================================================
 CREATE TABLE IF NOT EXISTS channel_config (
     id              UUID        PRIMARY KEY DEFAULT uuid_generate_v4(),
-    channel_name    TEXT        NOT NULL,
+    channel_name    TEXT        NOT NULL UNIQUE,
     niche           TEXT        NOT NULL,                  -- ex: "tecnologia", "finanças"
     tone            TEXT        NOT NULL DEFAULT 'educativo-direto',
     target_audience TEXT        NOT NULL,                  -- descrição do público-alvo

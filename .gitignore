@@ -1,5 +1,7 @@
 # ── Claude ───────────────────────────────
 CLAUDE.md
+# Artefatos de execução do agente
+artifacts/
 
 # ── Environment ───────────────────────────────
 .env
