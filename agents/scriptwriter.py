@@ -267,11 +267,25 @@ def _call_claude(
         f"Contexto: {topic.get('rationale', '')}\n\n"
         f"Claims verificados:\n{claims_text}\n\n"
         "Gere um roteiro completo com:\n"
-        "- hook: 1–2 frases de até 8 palavras — pergunta ou afirmação contraintuitiva que prende imediatamente\n"
-        "- beats: exatamente 3 blocos, cada um com 1 fato concreto dos claims + 1 analogia visual original e inesperada\n"
-        "- payoff: conclusão que fecha o loop do hook e surpreende com uma reflexão final\n"
-        "- cta: opcional, máximo 1 frase. NÃO use variações de 'não esqueça de se inscrever'. "
-        "Deixe como string vazia se não for natural ao tópico.\n\n"
+        "- hook: 1 frase que faz o espectador parar o scroll. Pode ser uma afirmação absurda que é verdade, "
+        "uma contradição que precisa de explicação, ou um dado que ninguém esperaria. "
+        "Não force uma virada na mesma frase — a curiosidade vem da frase ser incompleta, não de ter contraste embutido. "
+        "Máximo 10 palavras. Deve soar como algo que você falaria em voz alta para um amigo.\n"
+        "  Exemplos bons: 'Seu cérebro processa menos que um celular de 2015.' | "
+        "'A IA do Google falhou numa conta de segundo grau.' | "
+        "'Deletar 90% de uma IA pode torná-la mais inteligente.'\n"
+        "  Exemplos ruins: qualquer frase com ' — e', conclusões embutidas, "
+        "plot twist forçado na mesma frase, tom de manchete de jornal.\n"
+        "- beats: exatamente 3 blocos. Cada beat tem:\n"
+        "    fact: 1 fato concreto dos claims. Máximo 25 palavras. Dado específico, sem rodeios.\n"
+        "    analogy: 1 analogia visual original e inesperada que explica o fato. Máximo 20 palavras.\n"
+        "- payoff: conclusão que fecha o loop do hook com uma reflexão surpreendente. Máximo 20 palavras.\n"
+        "- cta: 1 pergunta curta e direta que qualquer pessoa responderia nos comentários sem pensar muito. "
+        "Deve parecer que um amigo perguntou no WhatsApp. Máximo 10 palavras.\n"
+        "  Exemplos bons: 'Você confiaria mais na IA ou no médico?' | "
+        "'Qual desses fatos te pegou de surpresa?' | 'Isso mudou como você vê IA?'\n"
+        "  Exemplos ruins: frases longas, referências técnicas, qualquer coisa com mais de 1 vírgula. "
+        "Use string vazia se não for natural ao tópico.\n\n"
         "Todos os textos em português do Brasil (pt-BR)."
     )
 
@@ -289,8 +303,12 @@ def _call_claude(
                         "hook": {
                             "type": "string",
                             "description": (
-                                "1–2 frases, até 8 palavras. "
-                                "Pergunta ou afirmação contraintuitiva que prende nos primeiros 5 segundos."
+                                "1 frase, máximo 10 palavras. "
+                                "Afirmação absurda-mas-verdadeira, contradição que pede explicação, ou dado inesperado. "
+                                "A curiosidade vem da frase ser incompleta — não force contraste na mesma frase. "
+                                "Soa como algo falado em voz alta para um amigo. "
+                                "Bom: 'Deletar 90% de uma IA pode torná-la mais inteligente.' "
+                                "Ruim: qualquer frase com ' — e', plot twist embutido, tom de manchete."
                             ),
                         },
                         "beats": {
@@ -302,11 +320,11 @@ def _call_claude(
                                 "properties": {
                                     "fact": {
                                         "type": "string",
-                                        "description": "Fato concreto e verificável do tópico",
+                                        "description": "Fato concreto e verificável do tópico. Máximo 25 palavras.",
                                     },
                                     "analogy": {
                                         "type": "string",
-                                        "description": "Analogia visual original e inesperada que explica o fato",
+                                        "description": "Analogia visual original e inesperada que explica o fato. Máximo 20 palavras.",
                                     },
                                 },
                                 "required": ["fact", "analogy"],
@@ -314,13 +332,15 @@ def _call_claude(
                         },
                         "payoff": {
                             "type": "string",
-                            "description": "Conclusão que fecha o loop do hook com uma reflexão surpreendente",
+                            "description": "Conclusão que fecha o loop do hook com uma reflexão surpreendente. Máximo 20 palavras.",
                         },
                         "cta": {
                             "type": "string",
                             "description": (
-                                "Call to action opcional, 1 frase máxima. "
-                                "NÃO use 'não esqueça de se inscrever' nem variações. "
+                                "1 pergunta curta e direta, máximo 10 palavras. "
+                                "Deve parecer que um amigo perguntou no WhatsApp — qualquer pessoa responderia nos comentários. "
+                                "Bom: 'Você confiaria mais na IA ou no médico?' "
+                                "Ruim: frases longas, referências técnicas, mais de 1 vírgula. "
                                 "Use string vazia se não for natural ao tópico."
                             ),
                         },

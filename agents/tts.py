@@ -42,7 +42,8 @@ log = logging.getLogger(__name__)
 # ── Constantes ─────────────────────────────────────────────────────────────────
 
 AGENT_NAME = "tts"
-TTS_VOICE = "pt-BR-AntonioNeural"
+TTS_VOICE = os.getenv("EDGE_TTS_VOICE", "pt-BR-AntonioNeural")
+TTS_RATE = os.getenv("EDGE_TTS_RATE", "+20%")
 OUTPUT_BASE = Path("output") / "audio"
 
 # ── Helpers de banco ───────────────────────────────────────────────────────────
@@ -145,7 +146,7 @@ def _build_segments(script: dict) -> dict[str, str]:
 def _generate_segment(text: str, output_path: Path) -> float:
     """Gera .mp3 para um segmento e retorna a duração em segundos."""
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    communicate = edge_tts.Communicate(text, TTS_VOICE)
+    communicate = edge_tts.Communicate(text, TTS_VOICE, rate=TTS_RATE)
     communicate.save_sync(str(output_path))
     audio = MP3(str(output_path))
     return round(audio.info.length, 3)
@@ -219,6 +220,16 @@ def generate_audio(video_id: UUID) -> dict[str, float]:
 # ── Execução manual ────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
+    import argparse
+
+    _parser = argparse.ArgumentParser(description="TTS agent — gera áudio para um vídeo")
+    _parser.add_argument(
+        "--video-id",
+        metavar="UUID",
+        help="UUID do vídeo (opcional; padrão: primeiro com status='scripted')",
+    )
+    _args = _parser.parse_args()
+
     _db_url = os.getenv("SUPABASE_DB_URL")
     if not _db_url:
         print("SUPABASE_DB_URL não definido no .env")
@@ -226,23 +237,37 @@ if __name__ == "__main__":
 
     _conn = psycopg2.connect(_db_url, connect_timeout=10)
     with _conn.cursor() as _cur:
-        _cur.execute(
-            """
-            SELECT v.id, t.title
-            FROM   videos v
-            JOIN   topics t  ON t.id = v.topic_id
-            JOIN   scripts s ON s.video_id = v.id
-            WHERE  v.status = 'scripted'
-            ORDER  BY v.updated_at ASC
-            LIMIT  1
-            """
-        )
+        if _args.video_id:
+            _cur.execute(
+                """
+                SELECT v.id, t.title
+                FROM   videos v
+                JOIN   topics t ON t.id = v.topic_id
+                WHERE  v.id = %s
+                """,
+                (_args.video_id,),
+            )
+        else:
+            _cur.execute(
+                """
+                SELECT v.id, t.title
+                FROM   videos v
+                JOIN   topics t  ON t.id = v.topic_id
+                JOIN   scripts s ON s.video_id = v.id
+                WHERE  v.status = 'scripted'
+                ORDER  BY v.updated_at ASC
+                LIMIT  1
+                """
+            )
         _row = _cur.fetchone()
     _conn.close()
 
     if not _row:
-        print("Nenhum vídeo com status='scripted' encontrado.")
-        print("Execute primeiro: uv run python agents/scriptwriter.py")
+        if _args.video_id:
+            print(f"Vídeo não encontrado: {_args.video_id}")
+        else:
+            print("Nenhum vídeo com status='scripted' encontrado.")
+            print("Execute primeiro: uv run python agents/scriptwriter.py")
         sys.exit(1)
 
     _video_id, _title = _row
