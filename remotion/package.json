@@ -1,0 +1,20 @@
+{
+  "name": "apogee-remotion",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "preview": "remotion preview",
+    "render": "remotion render ShortExplainer out/video.mp4"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "Apogee Engine — Remotion compositions",
+  "dependencies": {
+    "@remotion/cli": "^4.0.428",
+    "@remotion/player": "^4.0.428",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "remotion": "^4.0.428"
+  }
+}
