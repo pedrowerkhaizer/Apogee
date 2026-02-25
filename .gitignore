@@ -2,6 +2,8 @@
 CLAUDE.md
 # Artefatos de execução do agente
 artifacts/
+# Git worktrees
+.worktrees/
 
 # ── Environment ───────────────────────────────
 .env
