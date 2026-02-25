@@ -16,6 +16,7 @@ import logging
 import os
 import time
 from datetime import datetime, timezone
+from pathlib import Path
 from uuid import UUID
 
 import psycopg2
@@ -44,6 +45,10 @@ REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
 PIPELINE_SCHEDULE = os.getenv("PIPELINE_SCHEDULE", "0 8 * * *")
 APPROVAL_TIMEOUT_HOURS = int(os.getenv("APPROVAL_TIMEOUT_HOURS", "48"))
 APPROVAL_POLL_INTERVAL_S = int(os.getenv("APPROVAL_POLL_INTERVAL_S", "60"))
+TEMPLATE_SCORE_POLL_S = int(os.getenv("TEMPLATE_SCORE_POLL_S", "30"))
+
+ROOT = Path(__file__).parent
+STORYBOARD_BASE = ROOT / "output" / "storyboards"
 
 MAX_FACT_CHECK_ATTEMPTS = 2  # máximo de tentativas scriptwriter+factchecker por vídeo
 
@@ -215,6 +220,175 @@ def _build_video_spec(
     )
 
 
+# ── template_score ─────────────────────────────────────────────────────────────
+
+
+def _fetch_script_similarity(
+    conn: psycopg2.extensions.connection, video_id: UUID
+) -> float:
+    """Retorna similarity_score do script mais recente do vídeo (0.0 se NULL)."""
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT similarity_score
+            FROM   scripts
+            WHERE  video_id = %s
+            ORDER  BY created_at DESC
+            LIMIT  1
+            """,
+            (str(video_id),),
+        )
+        row = cur.fetchone()
+    if not row or row[0] is None:
+        return 0.0
+    return float(row[0])
+
+
+def _calc_scene_reuse_rate(
+    conn: psycopg2.extensions.connection, video_id: UUID
+) -> float:
+    """Calcula % de vídeos recentes com conjunto de tipos de cena idêntico ao atual.
+
+    Carrega storyboards de `output/storyboards/{id}.json`.
+    Retorna 0.0 se nenhum storyboard anterior for encontrado.
+    """
+    # Tipos de cena do vídeo atual
+    current_storyboard_path = STORYBOARD_BASE / f"{video_id}.json"
+    if not current_storyboard_path.exists():
+        log.warning("[template_score] Storyboard do vídeo atual não encontrado: %s", current_storyboard_path)
+        return 0.0
+
+    current_data = json.loads(current_storyboard_path.read_text())
+    current_types = tuple(scene["type"] for scene in current_data.get("scenes", []))
+
+    # Últimos 10 vídeos renderizados/publicados (excluindo o atual)
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT id FROM videos
+            WHERE  status IN ('rendered', 'published')
+              AND  id != %s
+            ORDER  BY updated_at DESC
+            LIMIT  10
+            """,
+            (str(video_id),),
+        )
+        rows = cur.fetchall()
+
+    if not rows:
+        return 0.0
+
+    matches = 0
+    total = 0
+    for (vid_id,) in rows:
+        sb_path = STORYBOARD_BASE / f"{vid_id}.json"
+        if not sb_path.exists():
+            continue
+        try:
+            sb_data = json.loads(sb_path.read_text())
+            types = tuple(scene["type"] for scene in sb_data.get("scenes", []))
+            total += 1
+            if types == current_types:
+                matches += 1
+        except Exception:
+            continue
+
+    if total == 0:
+        return 0.0
+    return matches / total
+
+
+def _persist_template_score(
+    conn: psycopg2.extensions.connection, video_id: UUID, template_score: float
+) -> None:
+    """Persiste template_score no script mais recente do vídeo."""
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            UPDATE scripts
+            SET    template_score = %s
+            WHERE  id = (
+                SELECT id FROM scripts
+                WHERE  video_id = %s
+                ORDER  BY created_at DESC
+                LIMIT  1
+            )
+            """,
+            (round(template_score, 6), str(video_id)),
+        )
+
+
+def _template_score_gate(video_id: UUID, template_score: float) -> None:
+    """Pausa o pipeline até FORCE_RENDER=true no .env."""
+    log.warning(
+        "[%s] template_score=%.3f > 0.70 — pipeline pausado. "
+        "Defina FORCE_RENDER=true no .env para continuar.",
+        str(video_id)[:8],
+        template_score,
+    )
+    while True:
+        load_dotenv(override=True)
+        if os.getenv("FORCE_RENDER", "").lower() == "true":
+            log.info("[%s] FORCE_RENDER=true detectado. Continuando render.", str(video_id)[:8])
+            return
+        log.info(
+            "[%s] Aguardando FORCE_RENDER=true... (próxima verificação em %ds)",
+            str(video_id)[:8],
+            TEMPLATE_SCORE_POLL_S,
+        )
+        time.sleep(TEMPLATE_SCORE_POLL_S)
+
+
+def calculate_template_score(video_id: UUID) -> float:
+    """Calcula e persiste template_score antes do render.
+
+    Fórmula:
+        template_score = 0.4 * scene_reuse_rate
+                       + 0.4 * script_similarity_max
+                       + 0.2 * asset_reuse_rate
+
+    Pausa o pipeline se template_score > 0.70, aguardando FORCE_RENDER=true no .env.
+
+    Args:
+        video_id: UUID do vídeo.
+
+    Returns:
+        float: template_score calculado.
+    """
+    conn = _get_conn()
+    try:
+        script_similarity_max = _fetch_script_similarity(conn, video_id)
+        scene_reuse_rate = _calc_scene_reuse_rate(conn, video_id)
+        asset_reuse_rate = 0.0  # sem assets por enquanto
+
+        template_score = (
+            0.4 * scene_reuse_rate
+            + 0.4 * script_similarity_max
+            + 0.2 * asset_reuse_rate
+        )
+
+        log.info(
+            "[%s] template_score=%.3f  "
+            "(scene_reuse=%.3f  script_sim=%.3f  asset_reuse=%.3f)",
+            str(video_id)[:8],
+            template_score,
+            scene_reuse_rate,
+            script_similarity_max,
+            asset_reuse_rate,
+        )
+
+        _persist_template_score(conn, video_id, template_score)
+        conn.commit()
+
+        if template_score > 0.70:
+            _template_score_gate(video_id, template_score)
+
+        return template_score
+
+    finally:
+        conn.close()
+
+
 # ── RQ helpers ─────────────────────────────────────────────────────────────────
 
 
@@ -317,6 +491,7 @@ def _process_topic(
             log.info("[%s] FactChecker aprovado (risk_score=%.3f).", str(video_id)[:8], fact_result.risk_score)
             break
 
+
         log.warning(
             "[%s] FactChecker rejeitou (risk_score=%.3f). Issues: %s",
             str(video_id)[:8],
@@ -328,6 +503,9 @@ def _process_topic(
             _mark_video_failed(conn, video_id, reason)
             log.error("[%s] Vídeo marcado como 'failed'.", str(video_id)[:8])
             return None
+
+    # E3.1: calcula template_score antes do render (pausa se > 0.70)
+    calculate_template_score(video_id)
 
     spec = _build_video_spec(conn, video_id)
     log.info("[%s] VideoSpec construído com sucesso.", str(video_id)[:8])

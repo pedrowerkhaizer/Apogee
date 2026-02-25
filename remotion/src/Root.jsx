@@ -26,6 +26,8 @@ const calculateMetadata = async ({ props }) => {
 const SAMPLE_STORYBOARD = {
   video_id: "390318b4-df7a-42b7-a78a-1c7dcc319ea2",
   total_duration: 52.152,
+  hook_style: 0,
+  palette: 0,
   scenes: [
     {
       id: "hook",

@@ -1,6 +1,8 @@
 {
   "video_id": "390318b4-df7a-42b7-a78a-1c7dcc319ea2",
   "total_duration": 52.152,
+  "hook_style": 3,
+  "palette": 0,
   "scenes": [
     {
       "id": "hook",

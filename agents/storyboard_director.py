@@ -16,6 +16,7 @@ from pathlib import Path
 # Garante que a raiz do projeto está em sys.path ao rodar como script
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+import hashlib
 import json
 import logging
 import os
@@ -66,12 +67,13 @@ def _get_conn() -> psycopg2.extensions.connection:
 def _fetch_script(
     conn: psycopg2.extensions.connection, video_id: UUID
 ) -> dict:
-    """Retorna o script mais recente do vídeo."""
+    """Retorna o script mais recente + topic_id do vídeo."""
     with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
         cur.execute(
             """
-            SELECT s.hook, s.beats, s.payoff, s.cta
+            SELECT s.hook, s.beats, s.payoff, s.cta, v.topic_id
             FROM   scripts s
+            JOIN   videos  v ON v.id = s.video_id
             WHERE  s.video_id = %s
             ORDER  BY s.created_at DESC
             LIMIT  1
@@ -82,6 +84,12 @@ def _fetch_script(
     if not row:
         raise ValueError(f"Nenhum script encontrado para o vídeo: {video_id}")
     return dict(row)
+
+
+def _compute_style_palette(topic_id: UUID) -> tuple[int, int]:
+    """Deriva hook_style (0–4) e palette (0–1) de forma determinística via SHA-256."""
+    digest = int(hashlib.sha256(str(topic_id).encode()).hexdigest(), 16)
+    return digest % 5, digest % 2
 
 
 def _record_agent_run(
@@ -170,6 +178,8 @@ def build_storyboard(video_id: UUID) -> dict:
 
     try:
         script = _fetch_script(conn, video_id)
+        topic_id = UUID(str(script["topic_id"]))
+        hook_style, palette = _compute_style_palette(topic_id)
         texts = _build_texts(script)
         durations = _read_durations(video_id)
 
@@ -213,8 +223,14 @@ def build_storyboard(video_id: UUID) -> dict:
         storyboard = {
             "video_id": str(video_id),
             "total_duration": total_duration,
+            "hook_style": hook_style,
+            "palette": palette,
             "scenes": scenes,
         }
+        log.info(
+            "  hook_style=%d  palette=%d  (topic_id=%s)",
+            hook_style, palette, str(topic_id)[:8],
+        )
 
         # Salva em output/storyboards/{video_id}.json
         STORYBOARD_BASE.mkdir(parents=True, exist_ok=True)
