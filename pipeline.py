@@ -29,6 +29,7 @@ from rq import Queue
 from rq.job import Job, JobStatus
 
 from models import Claim, FactCheckResult, Script, ScriptBeat, VideoSpec, VideoStatus
+from scripts.alerting import daily_summary, rotate_logs, send_alert
 
 load_dotenv()
 
@@ -122,6 +123,11 @@ def _mark_video_failed(
             (reason, str(video_id)),
         )
     conn.commit()
+    send_alert(
+        "Vídeo falhou",
+        f"video_id={str(video_id)[:8]} — {reason}",
+        level="error",
+    )
 
 
 def _record_orchestrator_run(
@@ -325,6 +331,12 @@ def _template_score_gate(video_id: UUID, template_score: float) -> None:
         "Defina FORCE_RENDER=true no .env para continuar.",
         str(video_id)[:8],
         template_score,
+    )
+    send_alert(
+        "template_score gate ativado",
+        f"video_id={str(video_id)[:8]} template_score={template_score:.3f} > 0.70. "
+        "Defina FORCE_RENDER=true no .env para continuar.",
+        level="warning",
     )
     while True:
         load_dotenv(override=True)
@@ -630,6 +642,22 @@ if __name__ == "__main__":
             args=[_channel_id],
             id="apogee_pipeline",
             name="Apogee Daily Pipeline",
+            misfire_grace_time=3600,
+        )
+        # Sumário diário às 23h (após o pipeline do dia)
+        def _run_daily_tasks() -> None:
+            _c = _get_conn()
+            try:
+                daily_summary(_c)
+                rotate_logs(max_days=30)
+            finally:
+                _c.close()
+
+        scheduler.add_job(
+            _run_daily_tasks,
+            CronTrigger(hour=23, minute=0, timezone="America/Sao_Paulo"),
+            id="apogee_daily_tasks",
+            name="Apogee Daily Summary & Log Rotation",
             misfire_grace_time=3600,
         )
         log.info("Scheduler ativo — cron: '%s'. Pressione Ctrl+C para encerrar.", PIPELINE_SCHEDULE)
