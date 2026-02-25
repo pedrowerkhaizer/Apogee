@@ -4,6 +4,20 @@ import { ShortExplainer } from "./compositions/ShortExplainer.jsx";
 
 const FPS = 30;
 
+// calculateMetadata: tenta carregar /input_props.json no Remotion Studio;
+// se não existir, usa SAMPLE_STORYBOARD como fallback.
+const calculateMetadata = async ({ props }) => {
+  let storyboard = props.storyboard;
+  try {
+    const res = await fetch("/input_props.json");
+    if (res.ok) storyboard = await res.json();
+  } catch {}
+  return {
+    durationInFrames: Math.round(storyboard.total_duration * FPS),
+    props: { ...props, storyboard },
+  };
+};
+
 // Storyboard de amostra para preview (vídeo 390318b4)
 const SAMPLE_STORYBOARD = {
   video_id: "390318b4-df7a-42b7-a78a-1c7dcc319ea2",
@@ -67,9 +81,9 @@ export const RemotionRoot = () => {
       height={1920}
       defaultProps={{
         storyboard: SAMPLE_STORYBOARD,
-        bgTop: "#0a0a0a",
-        bgBottom: "#1a1a2e",
+        showTimer: true,
       }}
+      calculateMetadata={calculateMetadata}
     />
   );
 };
