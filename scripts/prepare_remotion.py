@@ -52,10 +52,12 @@ def main():
 
     print(f"✓ {len(mp3_files)} arquivo(s) copiado(s) → {audio_dst}")
 
-    # Escreve input_props.json
+    # Escreve input_props.json no formato esperado pelo Remotion (--props / calculateMetadata)
+    # Shape: { storyboard: {...}, showTimer: true }
     storyboard = json.loads(storyboard_path.read_text())
+    input_props = {"storyboard": storyboard, "showTimer": True}
     input_props_path = REMOTION_PUBLIC / "input_props.json"
-    input_props_path.write_text(json.dumps(storyboard, ensure_ascii=False, indent=2))
+    input_props_path.write_text(json.dumps(input_props, ensure_ascii=False, indent=2))
     print(f"✓ input_props.json escrito → {input_props_path}")
 
     print()

@@ -10,7 +10,11 @@ const calculateMetadata = async ({ props }) => {
   let storyboard = props.storyboard;
   try {
     const res = await fetch("/input_props.json");
-    if (res.ok) storyboard = await res.json();
+    if (res.ok) {
+      const data = await res.json();
+      // Suporta formato wrapped { storyboard: {...} } e formato raw (storyboard direto)
+      storyboard = data.storyboard ?? data;
+    }
   } catch {}
   return {
     durationInFrames: Math.round(storyboard.total_duration * FPS),
