@@ -13,6 +13,7 @@ from __future__ import annotations
 import logging
 import os
 import time
+from pathlib import Path
 from uuid import UUID
 
 import anthropic
@@ -43,6 +44,9 @@ SIMILARITY_THRESHOLD = 0.75
 
 INPUT_COST_PER_TOK = 3.0 / 1_000_000   # $3 por MTok input
 OUTPUT_COST_PER_TOK = 15.0 / 1_000_000  # $15 por MTok output
+
+# Caminho para o modelo do ranker (opcional — integração silenciosa)
+_RANKER_PATH = Path(__file__).parent.parent / "models" / "ranker.pkl"
 
 # ── Sentence Transformer (lazy, carregado uma vez) ─────────────────────────────
 
@@ -263,6 +267,36 @@ def _parse_candidates(response: anthropic.types.Message) -> list[dict]:
     raise ValueError("Claude não retornou tool_use com 'submit_topics'")
 
 
+# ── Ranker de candidatos (integração opcional) ─────────────────────────────────
+
+
+def _rank_candidates(candidates: list[dict]) -> list[dict]:
+    """Ordena candidatos pelo ranker se o modelo estiver disponível.
+
+    Se `models/ranker.pkl` não existir, retorna a lista na ordem original
+    (fallback silencioso — o ranker é sempre opcional).
+
+    Args:
+        candidates: lista de dicts com chaves: title, similarity_score, created_at, ...
+
+    Returns:
+        Lista de candidatos, potencialmente reordenada por score previsto DESC.
+    """
+    if not _RANKER_PATH.exists():
+        return candidates
+    try:
+        # Importação lazy para evitar dependência dura de scikit-learn no módulo
+        from ranker import score_topics  # noqa: PLC0415
+
+        ranked = score_topics(candidates)
+        reordered = [topic for topic, _score in ranked]
+        log.info("Ranker aplicado: candidatos reordenados por score previsto.")
+        return reordered
+    except Exception as exc:  # noqa: BLE001
+        log.warning("Ranker indisponível (fallback para ordem original): %s", exc)
+        return candidates
+
+
 # ── Agente principal ───────────────────────────────────────────────────────────
 
 
@@ -297,7 +331,10 @@ def mine_topics(channel_id: UUID) -> list[dict]:
             response.usage.output_tokens,
         )
 
-        # 3. Embeddings + deduplicação + persistência
+        # 3. Reordenação por ranker (opcional — fallback silencioso se modelo ausente)
+        candidates = _rank_candidates(candidates)
+
+        # 4. Embeddings + deduplicação + persistência
         embedder = _get_embedder()
         saved: list[dict] = []
 
@@ -321,7 +358,7 @@ def mine_topics(channel_id: UUID) -> list[dict]:
 
         conn.commit()
 
-        # 4. Registra execução em agent_runs
+        # 5. Registra execução em agent_runs
         duration_ms = int((time.monotonic() - t0) * 1000)
         cost_usd = (
             response.usage.input_tokens * INPUT_COST_PER_TOK
