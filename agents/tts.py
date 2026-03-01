@@ -42,11 +42,29 @@ log = logging.getLogger(__name__)
 # ── Constantes ─────────────────────────────────────────────────────────────────
 
 AGENT_NAME = "tts"
-TTS_VOICE = os.getenv("EDGE_TTS_VOICE", "pt-BR-AntonioNeural")
-TTS_RATE = os.getenv("EDGE_TTS_RATE", "+20%")
-OUTPUT_BASE = Path("output") / "audio"
+TTS_RATE     = os.getenv("EDGE_TTS_RATE", "+20%")
+_DEFAULT_VOICE = os.getenv("EDGE_TTS_VOICE", "pt-BR-AntonioNeural")
+OUTPUT_BASE  = Path("output") / "audio"
 
 # ── Helpers de banco ───────────────────────────────────────────────────────────
+
+
+def _get_voice(conn: psycopg2.extensions.connection, video_id: UUID) -> str:
+    """Resolve a voz a usar com fallback em cascata:
+    videos.voice_override → channel_config.default_voice → env EDGE_TTS_VOICE
+    """
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT COALESCE(v.voice_override, c.default_voice, %s)
+            FROM   videos v
+            JOIN   channel_config c ON c.id = v.channel_id
+            WHERE  v.id = %s
+            """,
+            (_DEFAULT_VOICE, str(video_id)),
+        )
+        row = cur.fetchone()
+    return row[0] if row else _DEFAULT_VOICE
 
 
 def _get_conn() -> psycopg2.extensions.connection:
@@ -143,10 +161,10 @@ def _build_segments(script: dict) -> dict[str, str]:
 # ── Geração de áudio ───────────────────────────────────────────────────────────
 
 
-def _generate_segment(text: str, output_path: Path) -> float:
+def _generate_segment(text: str, output_path: Path, voice: str) -> float:
     """Gera .mp3 para um segmento e retorna a duração em segundos."""
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    communicate = edge_tts.Communicate(text, TTS_VOICE, rate=TTS_RATE)
+    communicate = edge_tts.Communicate(text, voice, rate=TTS_RATE)
     communicate.save_sync(str(output_path))
     audio = MP3(str(output_path))
     return round(audio.info.length, 3)
@@ -172,15 +190,19 @@ def generate_audio(video_id: UUID) -> dict[str, float]:
     output_dir = str(OUTPUT_BASE / str(video_id))
 
     try:
-        script = _fetch_script(conn, video_id)
+        script   = _fetch_script(conn, video_id)
+        voice    = _get_voice(conn, video_id)
         segments = _build_segments(script)
         segments_list = list(segments.keys())
-        log.info("Gerando áudio para vídeo %s — %d segmentos", str(video_id)[:8], len(segments))
+        log.info(
+            "Gerando áudio para vídeo %s — %d segmentos (voz: %s)",
+            str(video_id)[:8], len(segments), voice,
+        )
 
         for beat_id, text in segments.items():
             out_path = OUTPUT_BASE / str(video_id) / f"{beat_id}.mp3"
             log.info("  [%s] %d chars → %s", beat_id, len(text), out_path)
-            duration = _generate_segment(text, out_path)
+            duration = _generate_segment(text, out_path, voice)
             durations[beat_id] = duration
             log.info("    %.2fs", duration)
 
