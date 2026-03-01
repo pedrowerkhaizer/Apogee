@@ -51,6 +51,7 @@ def apply_migrations() -> None:
 
     log.info("Conectando ao banco de dados...")
     try:
+        log.warning("DB_URL Considerado: %s", db_url)
         conn = psycopg2.connect(db_url, connect_timeout=10)
     except Exception as exc:
         log.error("Falha ao conectar: %s", exc)
