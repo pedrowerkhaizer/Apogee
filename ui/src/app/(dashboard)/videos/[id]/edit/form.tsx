@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label'
 import { saveVideoEdits } from '@/app/actions/videos'
 import type { Video, ScriptVersion, ChannelConfig } from '@/lib/types'
 import { PT_BR_VOICES } from '@/lib/types'
-import { Save, Loader2, ChevronLeft } from 'lucide-react'
+import { Save, Loader2, ChevronLeft, Volume2 } from 'lucide-react'
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
 
@@ -54,6 +54,28 @@ export function EditForm({ video, script, channel }: EditFormProps) {
 
   const effectiveVoice = voiceOverride || channel.default_voice
   const hookLen = hook.length
+
+  const [previewing, setPreviewing] = useState(false)
+
+  async function handlePreview() {
+    if (previewing) return
+    setPreviewing(true)
+    try {
+      const res = await fetch('/api/tts/preview', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: hook || '', voice: effectiveVoice }),
+      })
+      if (!res.ok) throw new Error('Erro ao gerar preview')
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const audio = new Audio(url)
+      audio.onended = () => URL.revokeObjectURL(url)
+      await audio.play()
+    } finally {
+      setPreviewing(false)
+    }
+  }
 
   return (
     <div className="space-y-8">
@@ -121,6 +143,28 @@ export function EditForm({ video, script, channel }: EditFormProps) {
             Usar voz padrão do canal ({channel.default_voice})
           </button>
         )}
+
+        <button
+          type="button"
+          onClick={handlePreview}
+          disabled={previewing}
+          className={cn(
+            'flex items-center gap-2 px-3 py-2 rounded-sm text-sm transition-colors border w-fit',
+            previewing
+              ? 'border-accent/40 text-accent/60 bg-accent/5 cursor-not-allowed'
+              : 'border-border-default text-content-secondary hover:text-content-primary hover:border-border-strong bg-bg-elevated'
+          )}
+        >
+          {previewing
+            ? <><Loader2 size={13} className="animate-spin" /> Gerando…</>
+            : <><Volume2 size={13} /> Ouvir voz</>
+          }
+        </button>
+        {!hook && (
+          <p className="text-xs text-content-tertiary">
+            Sem hook — usa texto de demonstração.
+          </p>
+        )}
       </div>
 
       {/* Script */}
@@ -146,8 +190,8 @@ export function EditForm({ video, script, channel }: EditFormProps) {
             value={hook}
             onChange={e => setHook(e.target.value.slice(0, 200))}
             placeholder="Primeira frase impactante — máximo 200 caracteres"
-            rows={2}
-            className="resize-none text-content-primary font-mono text-sm"
+            rows={3}
+            className="text-content-primary font-mono text-sm"
           />
         </div>
 
@@ -163,8 +207,8 @@ export function EditForm({ video, script, channel }: EditFormProps) {
                 value={beat.fact}
                 onChange={e => updateBeat(i, 'fact', e.target.value)}
                 placeholder="Fato ou dado concreto"
-                rows={2}
-                className="resize-none text-content-primary text-sm"
+                rows={4}
+                className="text-content-primary text-sm"
               />
             </div>
             <div className="space-y-2">
@@ -173,8 +217,8 @@ export function EditForm({ video, script, channel }: EditFormProps) {
                 value={beat.analogy}
                 onChange={e => updateBeat(i, 'analogy', e.target.value)}
                 placeholder="Analogia ou explicação acessível"
-                rows={2}
-                className="resize-none text-content-primary text-sm"
+                rows={4}
+                className="text-content-primary text-sm"
               />
             </div>
           </div>
@@ -187,8 +231,8 @@ export function EditForm({ video, script, channel }: EditFormProps) {
             value={payoff}
             onChange={e => setPayoff(e.target.value)}
             placeholder="Conclusão e insight final"
-            rows={2}
-            className="resize-none text-content-primary text-sm"
+            rows={4}
+            className="text-content-primary text-sm"
           />
         </div>
 
