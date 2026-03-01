@@ -154,6 +154,7 @@ APOGEE_CHANNEL_ID=<uuid do canal em channel_config>
 | T8 — API routes | pipeline trigger + SSE + rerun | ✅ `edf3e05` |
 | T9 — Pipeline page | Run button + log stream + RQ monitor | ✅ `345cc39` |
 | T10 — Deploy | next.config, .env.example, vercel.json | ✅ `345cc39` |
+| M1.6 — Content Editor | tipos, saveVideoEdits, render API, edit page, pencil button, TTS voice cascade | ✅ `de194dc` |
 
 ---
 
