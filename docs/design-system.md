@@ -1,4 +1,4 @@
-# Apogee — Design System
+  # Apogee — Design System
 
 > Versão 1.0 · Fevereiro 2026
 > Stack: Next.js 14 · Tailwind CSS · shadcn/ui · Geist Font
