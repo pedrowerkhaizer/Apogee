@@ -22,6 +22,7 @@ export interface Video {
   status: VideoStatus
   youtube_video_id: string | null
   error_message: string | null
+  voice_override: string | null
   created_at: string
   updated_at: string
   // joined
@@ -60,4 +61,29 @@ export interface KpiData {
   pendingTopics: number
   lastRunAt: string | null
   lastRunStatus: AgentStatus | null
+}
+
+export const PT_BR_VOICES = [
+  { value: 'pt-BR-AntonioNeural',             label: 'Antônio (Masculino)' },
+  { value: 'pt-BR-FranciscaNeural',           label: 'Francisca (Feminino)' },
+  { value: 'pt-BR-ThalitaNeural',             label: 'Thalita (Feminino)' },
+  { value: 'pt-BR-MacerioMultilingualNeural', label: 'Macério (Masculino, multilingual)' },
+] as const
+
+export interface ChannelConfig {
+  id: string
+  channel_name: string
+  default_voice: string
+}
+
+export interface ScriptVersion {
+  id: string
+  video_id: string
+  hook: string
+  beats: { fact: string; analogy: string }[]
+  payoff: string
+  cta: string | null
+  version: number
+  template_score: number
+  created_at: string
 }
